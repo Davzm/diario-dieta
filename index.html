@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diário de Hipertrofia</title>
+    <style>
+        :root {
+            --bg-color: #F9F9FB;
+            --card-bg: #FFFFFF;
+            --primary: #FF6B00;
+            --primary-light: #FFF0E5;
+            --text-main: #1A1A1A;
+            --text-muted: #8E8E93;
+            --border-color: #E5E5EA;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        
+        body { background-color: var(--bg-color); display: flex; justify-content: center; }
+        
+        .mobile-container {
+            width: 100%;
+            max-width: 480px;
+            min-height: 100vh;
+            background-color: var(--bg-color);
+            position: relative;
+            padding-bottom: 80px;
+        }
+
+        /* Topografia & Header */
+        .header { padding: 30px 20px 20px; text-align: center; }
+        .header h1 { font-size: 24px; color: var(--text-main); font-weight: 700; margin-bottom: 4px; }
+        .header p { font-size: 14px; color: var(--text-muted); text-transform: lowercase; }
+
+        /* Vistas (Tabs) */
+        .view { display: none; padding: 0 20px; }
+        .view.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Card Principal (Resumo) */
+        .card { background: var(--card-bg); border-radius: 20px; padding: 25px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); margin-bottom: 25px; }
+        
+        /* Círculo de Progresso */
+        .progress-container { display: flex; justify-content: center; position: relative; margin-bottom: 30px; }
+        .progress-circle { width: 160px; height: 160px; position: relative; }
+        .progress-circle svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+        .circle-bg { fill: none; stroke: #F2F2F7; stroke-width: 12; }
+        .circle-fill { fill: none; stroke: var(--primary); stroke-width: 12; stroke-linecap: round; stroke-dasharray: 440; stroke-dashoffset: 440; transition: stroke-dashoffset 0.8s ease; }
+        .progress-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .progress-text h2 { font-size: 32px; color: var(--text-main); font-weight: 700; line-height: 1; }
+        .progress-text span { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-top: 5px; }
+
+        /* Macros */
+        .macros-row { display: flex; justify-content: space-between; text-align: center; border-top: 1px solid var(--border-color); padding-top: 20px; }
+        .macro-item span { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+        .macro-item strong { font-size: 14px; color: var(--text-main); }
+        .macro-item .goal-text { color: var(--text-muted); font-size: 12px; font-weight: 500; }
+
+        /* Seção Lista de Refeições */
+        .section-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .section-title h3 { font-size: 18px; color: var(--text-main); font-weight: 700; }
+        .badge { background: var(--primary-light); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+
+        .food-item { background: var(--card-bg); border-radius: 12px; padding: 15px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+        .food-info h4 { font-size: 15px; color: var(--text-main); margin-bottom: 4px; }
+        .food-info p { font-size: 12px; color: var(--text-muted); }
+        .food-value { font-size: 16px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
+        .delete-btn { color: #FF3B30; background: none; border: none; font-size: 18px; font-weight: bold; cursor: pointer; }
+
+        /* Formulário Adicionar */
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-size: 14px; color: var(--text-muted); margin-bottom: 8px; font-weight: 500; }
+        select, input { width: 100%; padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--card-bg); font-size: 16px; color: var(--text-main); outline: none; -webkit-appearance: none; }
+        .btn-submit { width: 100%; padding: 16px; border-radius: 12px; background: var(--primary); color: white; border: none; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(255, 107, 0, 0.3); }
+
+        /* Navegação Inferior */
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 480px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; align-items: center; height: 75px; z-index: 10; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); font-size: 10px; cursor: pointer; width: 60px; font-weight: 600; }
+        .nav-item.active { color: var(--primary); }
+        .nav-item svg { width: 24px; height: 24px; margin-bottom: 4px; fill: currentColor; }
+        
+        .fab-container { position: relative; top: -20px; }
+        .fab { width: 56px; height: 56px; background: var(--primary); border-radius: 50%; display: flex; justify-content: center; align-items: center; color: white; box-shadow: 0 4px 15px rgba(255, 107, 0, 0.3); }
+        .fab svg { width: 24px; height: 24px; fill: white; }
+    </style>
+</head>
+<body>
+
+<div class="mobile-container">
+    
+    <div class="header">
+        <h1>Resumo de Hoje</h1>
+        <p id="currentDate">carregando data...</p>
+    </div>
+
+    <!-- TELA 1: INÍCIO -->
+    <div id="view-inicio" class="view active">
+        <div class="card">
+            <div class="progress-container">
+                <div class="progress-circle">
+                    <svg viewBox="0 0 160 160">
+                        <circle class="circle-bg" cx="80" cy="80" r="70"></circle>
+                        <circle class="circle-fill" id="progressFill" cx="80" cy="80" r="70"></circle>
+                    </svg>
+                    <div class="progress-text">
+                        <h2 id="totalKcal">0</h2>
+                        <span>/ 2500 KCAL</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="macros-row">
+                <div class="macro-item">
+                    <span>Proteína</span>
+                    <strong><span id="totalP">0</span>g</strong>
+                    <span class="goal-text">/ 120g</span>
+                </div>
+                <div class="macro-item">
+                    <span>Carboidrato</span>
+                    <strong><span id="totalC">0</span>g</strong>
+                    <span class="goal-text">/ 370g</span>
+                </div>
+                <div class="macro-item">
+                    <span>Gordura</span>
+                    <strong><span id="totalF">0</span>g</strong>
+                    <span class="goal-text">/ 60g</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-title">
+            <h3>Refeições de Hoje</h3>
+            <span class="badge" id="itemCount">0 itens</span>
+        </div>
+        
+        <div id="foodList"></div>
+    </div>
+
+    <!-- TELA 2: ADICIONAR -->
+    <div id="view-adicionar" class="view">
+        <div class="card">
+            <h3 style="margin-bottom: 20px;">Nova Refeição</h3>
+            <div class="form-group">
+                <label>Selecione o Alimento</label>
+                <select id="foodSelect"></select>
+            </div>
+            <div class="form-group">
+                <label>Quantidade (peso ou ml/unidades)</label>
+                <input type="number" id="amountInput" placeholder="Ex: 100" inputmode="numeric">
+            </div>
+            <button class="btn-submit" onclick="addEntry()">Adicionar</button>
+        </div>
+    </div>
+
+    <!-- TELA 3: HISTÓRICO -->
+    <div id="view-historico" class="view">
+        <div class="card">
+            <h3 style="margin-bottom: 15px;">Dias Anteriores</h3>
+            <div id="pastDaysList">
+                <p style="font-size: 14px; color: var(--text-muted);">O histórico aparecerá aqui amanhã.</p>
+            </div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <div class="nav-item active" onclick="switchView('inicio', this)">
+            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            Início
+        </div>
+        
+        <div class="nav-item fab-container" onclick="switchView('adicionar', this)">
+            <div class="fab">
+                <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            </div>
+            <span style="margin-top: 8px;">Adicionar</span>
+        </div>
+        
+        <div class="nav-item" onclick="switchView('historico', this)">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+            Histórico
+        </div>
+    </nav>
+</div>
+
+<script>
+    const foodDB = {
+        "cuscuz_seco": { name: "Cuscuz (Flocão seco)", unit: "g", kcal: 3.43, p: 0.08, c: 0.76, f: 0 },
+        "ovo": { name: "Ovo Inteiro", unit: "unidade(s)", kcal: 70, p: 6, c: 0.5, f: 5 },
+        "azeite": { name: "Azeite de Oliva", unit: "colher de sopa", kcal: 119, p: 0, c: 0, f: 13 },
+        "banana": { name: "Banana Prata", unit: "g", kcal: 0.89, p: 0.01, c: 0.23, f: 0 },
+        "leite_po": { name: "Leite em Pó Desnatado", unit: "g", kcal: 3.58, p: 0.34, c: 0.55, f: 0 },
+        "pasta_amendoim": { name: "Pasta de Amendoim", unit: "g", kcal: 6.0, p: 0.25, c: 0.20, f: 0.50 },
+        "melado": { name: "Melado de Cana", unit: "g", kcal: 3.0, p: 0, c: 0.75, f: 0 },
+        "pao_forma": { name: "Pão de Forma Tradicional", unit: "fatia(s)", kcal: 60, p: 2, c: 11, f: 0.5 },
+        "queijo_minas": { name: "Queijo Minas Padrão", unit: "g", kcal: 3.38, p: 0.23, c: 0.05, f: 0.25 },
+        "frango": { name: "Frango Assado (Peito)", unit: "g", kcal: 1.65, p: 0.31, c: 0, f: 0.03 },
+        "arroz": { name: "Arroz Branco Cozido", unit: "g", kcal: 1.30, p: 0.02, c: 0.28, f: 0 },
+        "nutriwhey": { name: "Nutriwhey Gainer", unit: "g", kcal: 3.7, p: 0.25, c: 0.63, f: 0.01 },
+        "bolo_mesclado": { name: "Bolo Mesclado/Mármore", unit: "g", kcal: 3.75, p: 0.05, c: 0.52, f: 0.16 },
+        "coxinha": { name: "Coxinha de Frango", unit: "g", kcal: 3.00, p: 0.09, c: 0.30, f: 0.15 },
+        "pastel": { name: "Pastel de Festa", unit: "g", kcal: 3.30, p: 0.08, c: 0.35, f: 0.17 },
+        "coca_cola": { name: "Coca-Cola Tradicional", unit: "ml", kcal: 0.42, p: 0, c: 0.105, f: 0 }
+    };
+
+    let dailyEntries = [];
+    const todayStr = new Date().toISOString().split('T')[0];
+    const GOAL_KCAL = 2500;
+    const CIRCLE_CIRCUMFERENCE = 440;
+
+    function init() {
+        const options = { weekday: 'long', day: 'numeric', month: 'long' };
+        document.getElementById('currentDate').textContent = new Date().toLocaleDateString('pt-BR', options);
+
+        const select = document.getElementById('foodSelect');
+        for (const [key, food] of Object.entries(foodDB)) {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = `${food.name} (em ${food.unit})`;
+            select.appendChild(option);
+        }
+        
+        loadData();
+        updateUI();
+    }
+
+    function switchView(viewId, element) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById('view-' + viewId).classList.add('active');
+        
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        element.classList.add('active');
+
+        if (viewId === 'historico') renderHistory();
+    }
+
+    function loadData() {
+        const saved = localStorage.getItem(`macros_${todayStr}`);
+        if (saved) dailyEntries = JSON.parse(saved);
+    }
+
+    function saveData() {
+        localStorage.setItem(`macros_${todayStr}`, JSON.stringify(dailyEntries));
+    }
+
+    function addEntry() {
+        const foodKey = document.getElementById('foodSelect').value;
+        const amount = parseFloat(document.getElementById('amountInput').value);
+
+        if (!amount || amount <= 0) return alert("Insira uma quantidade válida!");
+
+        const food = foodDB[foodKey];
+        dailyEntries.push({
+            id: Date.now(), name: food.name, amount: amount, unit: food.unit,
+            kcal: Math.round(food.kcal * amount),
+            p: (food.p * amount).toFixed(1), c: (food.c * amount).toFixed(1), f: (food.f * amount).toFixed(1)
+        });
+
+        saveData();
+        updateUI();
+        document.getElementById('amountInput').value = '';
+        
+        switchView('inicio', document.querySelectorAll('.nav-item')[0]);
+    }
+
+    function deleteEntry(id) {
+        dailyEntries = dailyEntries.filter(entry => entry.id !== id);
+        saveData();
+        updateUI();
+    }
+
+    function updateUI() {
+        let totalKcal = 0, totalP = 0, totalC = 0, totalF = 0;
+        const list = document.getElementById('foodList');
+        list.innerHTML = '';
+
+        dailyEntries.forEach(entry => {
+            totalKcal += entry.kcal;
+            totalP += parseFloat(entry.p);
+            totalC += parseFloat(entry.c);
+            totalF += parseFloat(entry.f);
+
+            list.innerHTML += `
+                <div class="food-item">
+                    <div class="food-info">
+                        <h4>${entry.name} (${entry.amount}${entry.unit})</h4>
+                        <p>${entry.p}g P • ${entry.c}g C • ${entry.f}g G</p>
+                    </div>
+                    <div class="food-value">
+                        ${entry.kcal} kcal
+                        <button class="delete-btn" onclick="deleteEntry(${entry.id})">×</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        if (dailyEntries.length === 0) list.innerHTML = '<p style="text-align:center; color:var(--text-muted); font-size: 14px; margin-top:20px;">Nenhum alimento registrado ainda.</p>';
+
+        document.getElementById('totalKcal').textContent = totalKcal;
+        document.getElementById('totalP').textContent = Math.round(totalP);
+        document.getElementById('totalC').textContent = Math.round(totalC);
+        document.getElementById('totalF').textContent = Math.round(totalF);
+        document.getElementById('itemCount').textContent = dailyEntries.length + (dailyEntries.length === 1 ? ' item' : ' itens');
+
+        let progressPercent = totalKcal / GOAL_KCAL;
+        if (progressPercent > 1) progressPercent = 1;
+        const offset = CIRCLE_CIRCUMFERENCE - (progressPercent * CIRCLE_CIRCUMFERENCE);
+        document.getElementById('progressFill').style.strokeDashoffset = offset;
+    }
+
+    function renderHistory() {
+        const pastList = document.getElementById('pastDaysList');
+        pastList.innerHTML = '';
+        const allKeys = Object.keys(localStorage).filter(k => k.startsWith('macros_')).sort().reverse();
+
+        if (allKeys.length <= 1) {
+            pastList.innerHTML = '<p style="font-size: 14px; color: var(--text-muted);">Seu histórico de ontem aparecerá aqui.</p>';
+            return;
+        }
+
+        allKeys.forEach(key => {
+            if (key === `macros_${todayStr}`) return;
+            
+            const dateParts = key.replace('macros_', '').split('-');
+            const displayDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+            const data = JSON.parse(localStorage.getItem(key));
+            
+            let dayKcal = 0;
+            data.forEach(item => dayKcal += item.kcal);
+            
+            pastList.innerHTML += `
+                <div class="food-item" style="margin-bottom: 10px;">
+                    <div class="food-info">
+                        <h4>Data: ${displayDate}</h4>
+                    </div>
+                    <div class="food-value" style="color: ${dayKcal >= GOAL_KCAL ? '#34C759' : 'var(--primary)'};">
+                        ${dayKcal} / ${GOAL_KCAL} kcal
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    window.onload = init;
+</script>
+</body>
+</html>

@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Diário de Hipertrofia</title>
+    <!-- Chart.js para o gráfico de tendência -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --bg-color: #F9F9FB;
@@ -39,7 +41,7 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
         /* Card Principal (Resumo) */
-        .card { background: var(--card-bg); border-radius: 20px; padding: 25px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); margin-bottom: 25px; }
+        .card { background: var(--card-bg); border-radius: 20px; padding: 25px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); margin-bottom: 20px; }
         
         /* Círculo de Progresso */
         .progress-container { display: flex; justify-content: center; position: relative; margin-bottom: 30px; }
@@ -156,6 +158,13 @@
     <!-- TELA 3: HISTÓRICO -->
     <div id="view-historico" class="view">
         <div class="card">
+            <h3 style="margin-bottom: 15px;">Tendência de Calorias</h3>
+            <div style="position: relative; width: 100%; height: 210px;">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
             <h3 style="margin-bottom: 15px;">Dias Anteriores</h3>
             <div id="pastDaysList">
                 <p style="font-size: 14px; color: var(--text-muted);">O histórico aparecerá aqui amanhã.</p>
@@ -206,19 +215,48 @@
         "requeijao": { name: "Requeijão Tradicional", unit: "g", kcal: 2.60, p: 0.09, c: 0.042, f: 0.23 },
         "acai": { name: "Açaí Tradicional (Creme)", unit: "g", kcal: 1.05, p: 0.015, c: 0.21, f: 0.025 },
         "cocada": { name: "Cocada Tradicional", unit: "g", kcal: 4.20, p: 0.03, c: 0.60, f: 0.18 },
-        "peixada_completa": { name: "Peixada Completa (Peixe, Pirão e Arroz)", unit: "g", kcal: 1.60, p: 0.09, c: 0.15, f: 0.07 }
-
-
-
-
+        "peixada_completa": { name: "Peixada Completa (Peixe, Pirão e Arroz)", unit: "g", kcal: 1.60, p: 0.09, c: 0.15, f: 0.07 },
+        "burger_classico": { name: "Cheeseburger Clássico (120g)", unit: "unidade(s)", kcal: 520, p: 28, c: 38, f: 24 },
+        "refri_lata": { name: "Refrigerante Tradicional (Lata 350ml)", unit: "unidade(s)", kcal: 145, p: 0, c: 37, f: 0 }
     };
 
     let dailyEntries = [];
-    const todayStr = new Date().toISOString().split('T')[0];
     const GOAL_KCAL = 2500;
     const CIRCLE_CIRCUMFERENCE = 440;
+    let trendChartInstance = null;
+
+    // Retorna a data local formatada como DD/MM/AAAA sem fuso horário UTC
+    function getTodayStr() {
+        const now = new Date();
+        const d = String(now.getDate()).padStart(2, '0');
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const y = now.getFullYear();
+        return `${d}/${m}/${y}`;
+    }
+
+    const todayStr = getTodayStr();
+
+    function migrateLegacyData() {
+        // Converte chaves antigas YYYY-MM-DD para o novo formato DD/MM/AAAA
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('macros_') && key.includes('-')) {
+                const rawDate = key.replace('macros_', '');
+                const parts = rawDate.split('-');
+                if (parts.length === 3 && parts[0].length === 4) {
+                    const newKey = `macros_${parts[2]}/${parts[1]}/${parts[0]}`;
+                    if (!localStorage.getItem(newKey)) {
+                        localStorage.setItem(newKey, localStorage.getItem(key));
+                    }
+                    localStorage.removeItem(key);
+                }
+            }
+        }
+    }
 
     function init() {
+        migrateLegacyData();
+
         const options = { weekday: 'long', day: 'numeric', month: 'long' };
         document.getElementById('currentDate').textContent = new Date().toLocaleDateString('pt-BR', options);
 
@@ -318,33 +356,100 @@
         document.getElementById('progressFill').style.strokeDashoffset = offset;
     }
 
+    function parseDateDDMMYYYY(dateStr) {
+        const parts = dateStr.split('/');
+        return new Date(parts[2], parts[1] - 1, parts[0]);
+    }
+
     function renderHistory() {
         const pastList = document.getElementById('pastDaysList');
         pastList.innerHTML = '';
-        const allKeys = Object.keys(localStorage).filter(k => k.startsWith('macros_')).sort().reverse();
 
-        if (allKeys.length <= 1) {
-            pastList.innerHTML = '<p style="font-size: 14px; color: var(--text-muted);">Seu histórico de ontem aparecerá aqui.</p>';
+        const historyItems = [];
+
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('macros_')) {
+                const dateStr = key.replace('macros_', '');
+                const data = JSON.parse(localStorage.getItem(key)) || [];
+                const dayKcal = data.reduce((sum, item) => sum + item.kcal, 0);
+                historyItems.push({ dateStr, dateObj: parseDateDDMMYYYY(dateStr), kcal: dayKcal });
+            }
+        }
+
+        // Ordena cronologicamente para o gráfico
+        historyItems.sort((a, b) => a.dateObj - b.dateObj);
+
+        // 1. Renderiza o Gráfico de Tendência (Chart.js)
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        if (trendChartInstance) trendChartInstance.destroy();
+
+        const labels = historyItems.map(item => item.dateStr.substring(0, 5)); // DD/MM
+        const kcalData = historyItems.map(item => item.kcal);
+
+        trendChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels.length > 0 ? labels : ['Hoje'],
+                datasets: [
+                    {
+                        label: 'Consumo (kcal)',
+                        data: kcalData.length > 0 ? kcalData : [0],
+                        borderColor: '#FF6B00',
+                        backgroundColor: 'rgba(255, 107, 0, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.3,
+                        pointBackgroundColor: '#FF6B00',
+                        pointRadius: 4
+                    },
+                    {
+                        label: 'Meta (2500 kcal)',
+                        data: Array(labels.length || 1).fill(GOAL_KCAL),
+                        borderColor: '#8E8E93',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        suggestedMin: 1000,
+                        suggestedMax: 3000,
+                        grid: { color: '#E5E5EA' }
+                    },
+                    x: {
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // 2. Renderiza a lista de Dias Anteriores (excluindo hoje)
+        const pastDays = historyItems.filter(item => item.dateStr !== todayStr).reverse();
+
+        if (pastDays.length === 0) {
+            pastList.innerHTML = '<p style="font-size: 14px; color: var(--text-muted);">Seu histórico de dias anteriores aparecerá aqui.</p>';
             return;
         }
 
-        allKeys.forEach(key => {
-            if (key === `macros_${todayStr}`) return;
-            
-            const dateParts = key.replace('macros_', '').split('-');
-            const displayDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
-            const data = JSON.parse(localStorage.getItem(key));
-            
-            let dayKcal = 0;
-            data.forEach(item => dayKcal += item.kcal);
-            
+        pastDays.forEach(item => {
             pastList.innerHTML += `
                 <div class="food-item" style="margin-bottom: 10px;">
                     <div class="food-info">
-                        <h4>Data: ${displayDate}</h4>
+                        <h4>Data: ${item.dateStr}</h4>
                     </div>
-                    <div class="food-value" style="color: ${dayKcal >= GOAL_KCAL ? '#34C759' : 'var(--primary)'};">
-                        ${dayKcal} / ${GOAL_KCAL} kcal
+                    <div class="food-value" style="color: ${item.kcal >= GOAL_KCAL ? '#34C759' : 'var(--primary)'};">
+                        ${item.kcal} / ${GOAL_KCAL} kcal
                     </div>
                 </div>
             `;
